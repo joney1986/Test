@@ -12,7 +12,6 @@ function BuilderPage() {
     education: [{ degree: '', school: '', dates: '' }],
     skills: '',
   });
-  const [generatedResume, setGeneratedResume] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -48,7 +47,6 @@ function BuilderPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setGeneratedResume('');
     setError(null);
     setLoading(true);
     try {
@@ -59,11 +57,22 @@ function BuilderPage() {
         },
         body: JSON.stringify(formData),
       });
-      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate resume');
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP error! status: ${response.status}`);
       }
-      setGeneratedResume(data.resume_text);
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'resume.pdf');
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
     } catch (error) {
       setError(error.message);
     } finally {
@@ -73,59 +82,49 @@ function BuilderPage() {
 
   return (
     <div className="container">
-      <div className="builder-columns">
-        <div className="form-column">
-          <h1>AI Resume Builder</h1>
-          <p>Fill out the form below to generate your resume.</p>
-          <form onSubmit={handleSubmit} className="resume-form">
-            <h2>Personal Information</h2>
-            <input type="text" name="name" placeholder="Full Name" onChange={handleChange} required />
-            <input type="email" name="email" placeholder="Email" onChange={handleChange} required />
-            <input type="tel" name="phone" placeholder="Phone" onChange={handleChange} />
-            <input type="url" name="linkedin" placeholder="LinkedIn Profile URL" onChange={handleChange} />
+        <h1>AI Resume Builder</h1>
+        <p>Fill out the form below to generate a downloadable PDF of your resume.</p>
+        <form onSubmit={handleSubmit} className="resume-form">
+          <h2>Personal Information</h2>
+          <input type="text" name="name" placeholder="Full Name" onChange={handleChange} required />
+          <input type="email" name="email" placeholder="Email" onChange={handleChange} required />
+          <input type="tel" name="phone" placeholder="Phone" onChange={handleChange} />
+          <input type="url" name="linkedin" placeholder="LinkedIn Profile URL" onChange={handleChange} />
 
-            <h2>Professional Summary</h2>
-            <textarea name="summary" placeholder="A brief summary of your career" onChange={handleChange}></textarea>
+          <h2>Professional Summary</h2>
+          <textarea name="summary" placeholder="A brief summary of your career" onChange={handleChange}></textarea>
 
-            <h2>Work Experience</h2>
-            {formData.experience.map((exp, index) => (
-              <div key={index} className="form-section">
-                <input type="text" name="jobTitle" placeholder="Job Title" value={exp.jobTitle} onChange={(e) => handleChange(e, 'experience', index)} />
-                <input type="text" name="company" placeholder="Company" value={exp.company} onChange={(e) => handleChange(e, 'experience', index)} />
-                <input type="text" name="dates" placeholder="Dates (e.g., Jan 2020 - Present)" value={exp.dates} onChange={(e) => handleChange(e, 'experience', index)} />
-                <textarea name="responsibilities" placeholder="Key Responsibilities (one per line)" value={exp.responsibilities} onChange={(e) => handleChange(e, 'experience', index)}></textarea>
-                {formData.experience.length > 1 && <button type="button" className="remove-btn" onClick={() => removeSection('experience', index)}>Remove</button>}
-              </div>
-            ))}
-            <button type="button" className="add-btn" onClick={() => addSection('experience')}>Add Experience</button>
+          <h2>Work Experience</h2>
+          {formData.experience.map((exp, index) => (
+            <div key={index} className="form-section">
+              <input type="text" name="jobTitle" placeholder="Job Title" value={exp.jobTitle} onChange={(e) => handleChange(e, 'experience', index)} />
+              <input type="text" name="company" placeholder="Company" value={exp.company} onChange={(e) => handleChange(e, 'experience', index)} />
+              <input type="text" name="dates" placeholder="Dates (e.g., Jan 2020 - Present)" value={exp.dates} onChange={(e) => handleChange(e, 'experience', index)} />
+              <textarea name="responsibilities" placeholder="Key Responsibilities (one per line)" value={exp.responsibilities} onChange={(e) => handleChange(e, 'experience', index)}></textarea>
+              {formData.experience.length > 1 && <button type="button" className="remove-btn" onClick={() => removeSection('experience', index)}>Remove</button>}
+            </div>
+          ))}
+          <button type="button" className="add-btn" onClick={() => addSection('experience')}>Add Experience</button>
 
-            <h2>Education</h2>
-            {formData.education.map((edu, index) => (
-              <div key={index} className="form-section">
-                <input type="text" name="degree" placeholder="Degree (e.g., B.S. in Computer Science)" value={edu.degree} onChange={(e) => handleChange(e, 'education', index)} />
-                <input type="text" name="school" placeholder="School/University" value={edu.school} onChange={(e) => handleChange(e, 'education', index)} />
-                <input type="text" name="dates" placeholder="Dates (e.g., Aug 2016 - May 2020)" value={edu.dates} onChange={(e) => handleChange(e, 'education', index)} />
-                {formData.education.length > 1 && <button type="button" className="remove-btn" onClick={() => removeSection('education', index)}>Remove</button>}
-              </div>
-            ))}
-            <button type="button" className="add-btn" onClick={() => addSection('education')}>Add Education</button>
+          <h2>Education</h2>
+          {formData.education.map((edu, index) => (
+            <div key={index} className="form-section">
+              <input type="text" name="degree" placeholder="Degree (e.g., B.S. in Computer Science)" value={edu.degree} onChange={(e) => handleChange(e, 'education', index)} />
+              <input type="text" name="school" placeholder="School/University" value={edu.school} onChange={(e) => handleChange(e, 'education', index)} />
+              <input type="text" name="dates" placeholder="Dates (e.g., Aug 2016 - May 2020)" value={edu.dates} onChange={(e) => handleChange(e, 'education', index)} />
+              {formData.education.length > 1 && <button type="button" className="remove-btn" onClick={() => removeSection('education', index)}>Remove</button>}
+            </div>
+          ))}
+          <button type="button" className="add-btn" onClick={() => addSection('education')}>Add Education</button>
 
-            <h2>Skills</h2>
-            <textarea name="skills" placeholder="List your skills, separated by commas" onChange={handleChange}></textarea>
+          <h2>Skills</h2>
+          <textarea name="skills" placeholder="List your skills, separated by commas" onChange={handleChange}></textarea>
 
-            <button type="submit" className="submit-btn" disabled={loading}>
-              {loading ? 'Generating...' : 'Generate Resume'}
-            </button>
-          </form>
-        </div>
-        <div className="preview-column">
-          <h2>Generated Resume</h2>
+          <button type="submit" className="submit-btn" disabled={loading}>
+            {loading ? 'Generating PDF...' : 'Generate and Download PDF'}
+          </button>
           {error && <div className="error-message">{error}</div>}
-          <pre className="resume-preview">
-            {generatedResume || "Your generated resume will appear here..."}
-          </pre>
-        </div>
-      </div>
+        </form>
     </div>
   );
 }

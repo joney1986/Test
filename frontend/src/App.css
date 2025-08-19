@@ -224,27 +224,5 @@ button:hover {
     cursor: pointer;
 }
 
-.builder-columns {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 30px;
-}
-
-.preview-column {
-    background: #fff;
-    padding: 20px;
-    border-radius: 5px;
-    height: fit-content;
-}
-
-.resume-preview {
-    background: #f8f8f8;
-    padding: 15px;
-    border: 1px solid #eee;
-    border-radius: 5px;
-    white-space: pre-wrap; /* Allows text to wrap */
-    word-wrap: break-word; /* Breaks long words */
-    min-height: 500px;
-    font-family: monospace;
-    line-height: 1.5;
-}
+/* Styles for the two-column layout were here, but are no longer needed
+   as the resume is now downloaded as a PDF instead of previewed. */

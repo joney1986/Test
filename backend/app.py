@@ -1,7 +1,8 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
 import spacy
 from spacy.matcher import Matcher
+from fpdf import FPDF
 
 # Load the spaCy model
 nlp = spacy.load("en_core_web_sm")
@@ -31,6 +32,74 @@ for skill in all_skills:
 app = Flask(__name__)
 CORS(app)
 
+def create_resume_pdf(data):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+
+    # Header
+    name = data.get('name', '')
+    if name:
+        pdf.set_font('Helvetica', 'B', 20)
+        pdf.cell(0, 10, name.upper(), 0, 1, 'C')
+
+    contact_info = []
+    if data.get('email'): contact_info.append(data.get('email'))
+    if data.get('phone'): contact_info.append(data.get('phone'))
+    if data.get('linkedin'): contact_info.append(data.get('linkedin'))
+    if contact_info:
+        pdf.set_font('Helvetica', '', 10)
+        pdf.cell(0, 10, " | ".join(contact_info), 0, 1, 'C')
+
+    pdf.ln(5)
+
+    # Summary
+    summary = data.get('summary', '')
+    if summary:
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.cell(0, 10, 'PROFESSIONAL SUMMARY', 0, 1)
+        pdf.set_font('Helvetica', '', 10)
+        pdf.multi_cell(0, 5, summary)
+        pdf.ln(5)
+
+    # Work Experience
+    experience = data.get('experience', [])
+    if experience and any(exp.get('jobTitle') for exp in experience):
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.cell(0, 10, 'WORK EXPERIENCE', 0, 1)
+        for exp in experience:
+            if exp.get('jobTitle'):
+                pdf.set_font('Helvetica', 'B', 10)
+                pdf.cell(0, 5, f"{exp.get('jobTitle', '').upper()} | {exp.get('company', '')} | {exp.get('dates', '')}", 0, 1)
+                pdf.set_font('Helvetica', '', 10)
+                responsibilities = exp.get('responsibilities', '').split('\n')
+                for resp in responsibilities:
+                    if resp:
+                        pdf.multi_cell(0, 5, f'  - {resp.strip()}')
+                pdf.ln(3)
+
+    # Education
+    education = data.get('education', [])
+    if education and any(edu.get('degree') for edu in education):
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.cell(0, 10, 'EDUCATION', 0, 1)
+        pdf.set_font('Helvetica', '', 10)
+        for edu in education:
+            if edu.get('degree'):
+                pdf.cell(0, 5, f"{edu.get('degree', '')}", 0, 1)
+                pdf.cell(0, 5, f"{edu.get('school', '')} | {edu.get('dates', '')}", 0, 1)
+                pdf.ln(3)
+
+    # Skills
+    skills = data.get('skills', '')
+    if skills:
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.cell(0, 10, 'SKILLS', 0, 1)
+        pdf.set_font('Helvetica', '', 10)
+        pdf.multi_cell(0, 5, skills)
+
+    return pdf.output(dest='S').encode('latin-1')
+
 def extract_skills(text):
     """Extracts skills from a text using spaCy's Matcher."""
     doc = nlp(text)
@@ -52,20 +121,15 @@ def analyze():
 
     resume_skills = set(extract_skills(resume_text))
 
-    # For this version, we assume the job description skills are our predefined lists
-    # A more advanced version would extract these from the jd_text
     jd_required_skills = set(SKILLS_DB['required'])
     jd_nice_to_have_skills = set(SKILLS_DB['nice_to_have'])
 
-    # Calculate matched skills
     matched_required = list(resume_skills & jd_required_skills)
     matched_nice_to_have = list(resume_skills & jd_nice_to_have_skills)
 
-    # Calculate missing skills
     missing_required = list(jd_required_skills - resume_skills)
     missing_nice_to_have = list(jd_nice_to_have_skills - resume_skills)
 
-    # Calculate weighted score
     score = 0
     if len(jd_required_skills) > 0:
         required_score = (len(matched_required) / len(jd_required_skills)) * 70
@@ -90,67 +154,19 @@ def analyze():
 @app.route('/generate-resume', methods=['POST'])
 def generate_resume():
     data = request.get_json()
-
     if not data:
         return jsonify({"error": "No data provided."}), 400
 
-    # --- Resume Generation Logic ---
+    try:
+        pdf_bytes = create_resume_pdf(data)
 
-    resume_text = ""
-
-    # Header
-    name = data.get('name', '')
-    email = data.get('email', '')
-    phone = data.get('phone', '')
-    linkedin = data.get('linkedin', '')
-    if name:
-        resume_text += f"{name.upper()}\n"
-    if email or phone or linkedin:
-        resume_text += f"{email} | {phone} | {linkedin}\n"
-    resume_text += "="*50 + "\n\n"
-
-    # Summary
-    summary = data.get('summary', '')
-    if summary:
-        resume_text += "PROFESSIONAL SUMMARY\n"
-        resume_text += "-"*50 + "\n"
-        resume_text += f"{summary}\n\n"
-
-    # Work Experience
-    experience = data.get('experience', [])
-    if experience and any(exp.get('jobTitle') for exp in experience):
-        resume_text += "WORK EXPERIENCE\n"
-        resume_text += "-"*50 + "\n"
-        for exp in experience:
-            if exp.get('jobTitle'):
-                resume_text += f"{exp.get('jobTitle', '').upper()} | {exp.get('company', '')} | {exp.get('dates', '')}\n"
-                # Split responsibilities by newline and format as bullet points
-                responsibilities = exp.get('responsibilities', '').split('\n')
-                for resp in responsibilities:
-                    if resp:
-                        resume_text += f"  - {resp.strip()}\n"
-                resume_text += "\n"
-
-    # Education
-    education = data.get('education', [])
-    if education and any(edu.get('degree') for edu in education):
-        resume_text += "EDUCATION\n"
-        resume_text += "-"*50 + "\n"
-        for edu in education:
-            if edu.get('degree'):
-                resume_text += f"{edu.get('degree', '')}\n"
-                resume_text += f"{edu.get('school', '')} | {edu.get('dates', '')}\n\n"
-
-    # Skills
-    skills = data.get('skills', '')
-    if skills:
-        resume_text += "SKILLS\n"
-        resume_text += "-"*50 + "\n"
-        resume_text += f"{skills}\n"
-
-    return jsonify({
-        'resume_text': resume_text
-    })
+        response = make_response(pdf_bytes)
+        response.headers.set('Content-Type', 'application/pdf')
+        response.headers.set('Content-Disposition', 'attachment', filename='resume.pdf')
+        return response
+    except Exception as e:
+        print(f"Error generating PDF: {e}")
+        return jsonify({"error": "An error occurred while generating the PDF."}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

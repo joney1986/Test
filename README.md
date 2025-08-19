@@ -10,6 +10,7 @@ This version uses the `spaCy` Natural Language Processing (NLP) library to perfo
 -   An AI-powered backend service that analyzes the two texts and returns a weighted match score.
 -   The analysis identifies a predefined list of skills and categorizes them into "required" and "nice-to-have".
 -   A detailed results display showing the overall score, and lists of matched and missing skills, broken down by importance.
+-   An **AI Resume Builder** that takes structured user input (experience, education, etc.) and generates a professionally formatted, text-based resume.
 
 ## Tech Stack
 
@@ -69,4 +70,8 @@ The frontend is a React application located in the `frontend` directory.
 
 ### How It Works
 
-The React frontend will be running on `localhost:3000` and will make API calls to the Flask backend, which is running on `http://127.0.0.1:5000`. The backend uses `spaCy` to process the texts, extracts skills using a `Matcher`, and returns a structured JSON object with the analysis to the frontend. The backend is configured with `Flask-CORS` to allow cross-origin requests from the frontend during development.
+The React frontend will be running on `localhost:3000` and provides two main pages:
+-   `/` (Resume Analyzer): Makes API calls to the `/analyze` endpoint. The backend uses `spaCy` to process the texts, extracts skills using a `Matcher`, and returns a structured JSON object with the analysis to the frontend.
+-   `/builder` (Resume Builder): Contains a form to build a resume. It makes API calls to the `/generate-resume` endpoint to get a formatted text-based resume.
+
+The backend is configured with `Flask-CORS` to allow cross-origin requests from the frontend during development.

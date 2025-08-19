@@ -87,5 +87,70 @@ def analyze():
         }
     })
 
+@app.route('/generate-resume', methods=['POST'])
+def generate_resume():
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "No data provided."}), 400
+
+    # --- Resume Generation Logic ---
+
+    resume_text = ""
+
+    # Header
+    name = data.get('name', '')
+    email = data.get('email', '')
+    phone = data.get('phone', '')
+    linkedin = data.get('linkedin', '')
+    if name:
+        resume_text += f"{name.upper()}\n"
+    if email or phone or linkedin:
+        resume_text += f"{email} | {phone} | {linkedin}\n"
+    resume_text += "="*50 + "\n\n"
+
+    # Summary
+    summary = data.get('summary', '')
+    if summary:
+        resume_text += "PROFESSIONAL SUMMARY\n"
+        resume_text += "-"*50 + "\n"
+        resume_text += f"{summary}\n\n"
+
+    # Work Experience
+    experience = data.get('experience', [])
+    if experience and any(exp.get('jobTitle') for exp in experience):
+        resume_text += "WORK EXPERIENCE\n"
+        resume_text += "-"*50 + "\n"
+        for exp in experience:
+            if exp.get('jobTitle'):
+                resume_text += f"{exp.get('jobTitle', '').upper()} | {exp.get('company', '')} | {exp.get('dates', '')}\n"
+                # Split responsibilities by newline and format as bullet points
+                responsibilities = exp.get('responsibilities', '').split('\n')
+                for resp in responsibilities:
+                    if resp:
+                        resume_text += f"  - {resp.strip()}\n"
+                resume_text += "\n"
+
+    # Education
+    education = data.get('education', [])
+    if education and any(edu.get('degree') for edu in education):
+        resume_text += "EDUCATION\n"
+        resume_text += "-"*50 + "\n"
+        for edu in education:
+            if edu.get('degree'):
+                resume_text += f"{edu.get('degree', '')}\n"
+                resume_text += f"{edu.get('school', '')} | {edu.get('dates', '')}\n\n"
+
+    # Skills
+    skills = data.get('skills', '')
+    if skills:
+        resume_text += "SKILLS\n"
+        resume_text += "-"*50 + "\n"
+        resume_text += f"{skills}\n"
+
+    return jsonify({
+        'resume_text': resume_text
+    })
+
 if __name__ == '__main__':
     app.run(debug=True)

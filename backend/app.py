@@ -3,6 +3,9 @@ from flask_cors import CORS
 import spacy
 from spacy.matcher import Matcher
 from fpdf import FPDF
+import speech_recognition as sr
+from pydub import AudioSegment
+import io
 
 # Load the spaCy model
 nlp = spacy.load("en_core_web_sm")
@@ -18,6 +21,67 @@ SKILLS_DB = {
         'deep learning', 'nlp', 'data analysis', 'agile', 'scrum'
     ]
 }
+
+QUESTION_CATEGORIES = {
+    "behavioral": [
+        "tell me about a time", "what would you do if", "give me an example",
+        "describe a situation", "how do you handle", "teamwork", "conflict",
+        "challenge", "failure", "success", "leadership"
+    ],
+    "technical": [
+        "what is", "explain", "how does", "compare", "contrast", "code",
+        "algorithm", "data structure", "database", "python", "javascript", "react"
+    ],
+    "personal": [
+        "tell me about yourself", "walk me through your resume",
+        "why are you interested in this role", "what are your strengths",
+        "what are your weaknesses"
+    ]
+}
+
+SUGGESTIONS_DB = {
+    "behavioral": "Structure your answer using the STAR method:\n- **S (Situation):** Describe the context. What was the situation and where did it take place?\n- **T (Task):** What was your role or responsibility in the situation?\n- **A (Action):** What specific actions did you take to handle the situation?\n- **R (Result):** What was the outcome of your actions? Quantify your success if possible.",
+    "technical": {
+        "what is python": "Python is a high-level, interpreted programming language known for its clear syntax and readability.",
+        "explain javascript": "JavaScript is a programming language that enables interactive web pages. It's a core technology of the web, alongside HTML and CSS.",
+        "what is a data structure": "A data structure is a way of organizing and storing data in a computer so that it can be accessed and modified efficiently."
+    },
+    "personal": "When answering personal questions, be authentic and connect your story to the company's values and the role's requirements. Highlight your passion and what makes you a great fit.",
+    "general": "Listen carefully to the question. If you need clarification, it's okay to ask. Take a moment to structure your thoughts before answering."
+}
+
+# This is a simulated database of answers that a model like Gemini might provide.
+GEMINI_ANSWERS_DB = {
+    "behavioral": {
+        "default": "Of course. One time at my previous job, we were facing a tight deadline for a critical project deliverable. The situation was that a key team member left unexpectedly, leaving us short-staffed. My task was to reorganize the remaining workload to ensure we still met the deadline. The action I took was to first hold a team meeting to assess our current progress and morale. I then redistributed the tasks, taking on some of the critical path items myself. I also set up a daily check-in to monitor progress and address any roadblocks immediately. The result was that not only did we meet the deadline, but the project was also praised for its quality. This experience taught me the importance of proactive leadership and clear communication in a crisis."
+    },
+    "technical": {
+        "what is python": "Python is a high-level, dynamically-typed programming language that is widely used for web development, data science, artificial intelligence, and scripting. It's known for its simple, clean syntax which emphasizes readability. Key features include a large standard library, automatic memory management, and support for multiple programming paradigms like object-oriented, imperative, functional, and procedural.",
+        "default": "That's a great technical question. While the specifics can vary depending on the context, the general principle is that [concept] is a method for [main purpose]. It works by [brief explanation of mechanism]. A common use case is in [example], where it helps to achieve [benefit]."
+    },
+    "personal": {
+        "default": "I'm a passionate and driven software engineer with a background in [Your Field]. Over the past [Number] years, I've honed my skills in [Key Skill 1], [Key Skill 2], and [Key Skill 3]. I'm particularly proud of my work on [Project or Accomplishment], where I was able to [Specific Achievement]. I'm drawn to this role at [Company Name] because of your commitment to [Company Value or Mission], and I'm confident that my skills and experience align perfectly with the requirements of this position."
+    },
+    "general": {
+        "default": "That's an interesting question. Based on my understanding, I would say that the most important aspect to consider is [Key Point]. This is because [Reasoning]. Additionally, one should also take into account [Secondary Point]. Ultimately, it's a balance between these factors."
+    }
+}
+
+def generate_gemini_answer(category, text):
+    """
+    Simulates a call to the Google Gemini API to generate a sample answer.
+    In a real application, this function would contain the API call.
+    """
+    text = text.lower()
+    if category in GEMINI_ANSWERS_DB:
+        # Check for a specific keyword match first (for technical questions)
+        if category == "technical":
+            for keyword, answer in GEMINI_ANSWERS_DB[category].items():
+                if keyword in text:
+                    return answer
+        # Return the default answer for the category
+        return GEMINI_ANSWERS_DB[category].get("default", "I would need a moment to think about that.")
+    return GEMINI_ANSWERS_DB["general"]["default"]
 
 # Initialize the Matcher with the shared vocabulary
 matcher = Matcher(nlp.vocab)
@@ -184,6 +248,74 @@ def extract_skills(text):
         found_skills.add(skill)
     return list(found_skills)
 
+def classify_question(text):
+    """Classifies a question into a category based on keywords."""
+    text = text.lower()
+    for category, keywords in QUESTION_CATEGORIES.items():
+        for keyword in keywords:
+            if keyword in text:
+                return category
+    return "general" # Default category if no keywords are matched
+
+def get_suggestion(category, text):
+    """Gets a suggestion based on the question category and text."""
+    if category == "technical":
+        text = text.lower()
+        # Look for a specific technical keyword in the text
+        for keyword, suggestion in SUGGESTIONS_DB["technical"].items():
+            if keyword in text:
+                return suggestion
+        # Generic technical suggestion if no specific keyword is found
+        return "For technical questions, be precise. Define the term, explain its purpose, and provide a brief example if possible."
+    return SUGGESTIONS_DB.get(category, SUGGESTIONS_DB["general"])
+
+FILLER_WORDS = [
+    "um", "uh", "er", "ah", "like", "okay", "right", "so", "you know"
+]
+
+@app.route('/analyze-feedback', methods=['POST'])
+def analyze_feedback():
+    if 'transcriptions' not in request.form or 'audio_files' not in request.files:
+        return jsonify({"error": "Missing transcriptions or audio files."}), 400
+
+    transcriptions = request.form.getlist('transcriptions')
+    audio_files = request.files.getlist('audio_files')
+
+    total_filler_words = 0
+    total_words = 0
+    total_duration_s = 0
+
+    for i, text in enumerate(transcriptions):
+        # Filler word analysis
+        words = text.lower().split()
+        total_words += len(words)
+        for word in words:
+            if word in FILLER_WORDS:
+                total_filler_words += 1
+
+        # Pacing analysis
+        audio_file = audio_files[i]
+        try:
+            audio_data = io.BytesIO(audio_file.read())
+            audio_segment = AudioSegment.from_file(audio_data) # pydub can infer format
+            total_duration_s += audio_segment.duration_seconds
+        except Exception as e:
+            print(f"Could not process audio file {i}: {e}")
+            # Skip this file if it's corrupted or in a wrong format
+            continue
+
+    wpm = (total_words / total_duration_s) * 60 if total_duration_s > 0 else 0
+
+    feedback = {
+        "filler_word_count": total_filler_words,
+        "wpm": round(wpm, 2),
+        "total_words": total_words,
+        "total_duration_seconds": round(total_duration_s, 2)
+    }
+
+    return jsonify(feedback)
+
+
 @app.route('/analyze', methods=['POST'])
 def analyze():
     # ... (analyze function is the same)
@@ -282,6 +414,54 @@ def get_suggestions():
     return jsonify({
         'suggestions': suggestions
     })
+
+@app.route('/transcribe', methods=['POST'])
+def transcribe_audio():
+    if 'audio' not in request.files:
+        return jsonify({"error": "No audio file found"}), 400
+
+    audio_file = request.files['audio']
+
+    # The audio from the browser is in webm format, so we need to convert it
+    try:
+        # Read the audio file in memory
+        audio_data = io.BytesIO(audio_file.read())
+
+        # Convert webm to wav using pydub
+        audio_segment = AudioSegment.from_file(audio_data, format="webm")
+
+        # Export to wav format in memory
+        wav_io = io.BytesIO()
+        audio_segment.export(wav_io, format="wav")
+        wav_io.seek(0)
+
+        # Use SpeechRecognition to transcribe the audio
+        r = sr.Recognizer()
+        with sr.AudioFile(wav_io) as source:
+            audio = r.record(source)
+
+        # Recognize speech using Google Web Speech API
+        text = r.recognize_google(audio)
+
+        # Classify the question
+        category = classify_question(text)
+
+        # Get a suggestion
+        suggestion = get_suggestion(category, text)
+
+        # Get a sample answer
+        gemini_answer = generate_gemini_answer(category, text)
+
+        return jsonify({
+            'transcription': text,
+            'category': category,
+            'suggestion': suggestion,
+            'gemini_answer': gemini_answer
+        })
+
+    except Exception as e:
+        print(f"Error during transcription: {e}")
+        return jsonify({"error": "Failed to transcribe audio."}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -3,3 +3,5 @@ Werkzeug<3.0.0
 Flask-Cors==3.0.10
 spacy==3.7.2
 fpdf2==2.7.4
+SpeechRecognition==3.8.1
+pydub==0.25.1

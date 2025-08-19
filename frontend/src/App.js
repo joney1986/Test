@@ -3,6 +3,8 @@ import { Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 import AnalyzerPage from './components/AnalyzerPage';
 import BuilderPage from './components/BuilderPage';
+import CopilotPage from './components/CopilotPage';
+import FeedbackPage from './components/FeedbackPage';
 
 function App() {
   return (
@@ -17,6 +19,9 @@ function App() {
             <li className="nav-item">
               <Link to="/builder" className="nav-link">Resume Builder</Link>
             </li>
+            <li className="nav-item">
+              <Link to="/copilot" className="nav-link">Interview Copilot</Link>
+            </li>
           </ul>
         </div>
       </nav>
@@ -24,6 +29,8 @@ function App() {
         <Routes>
           <Route path="/" element={<AnalyzerPage />} />
           <Route path="/builder" element={<BuilderPage />} />
+          <Route path="/copilot" element={<CopilotPage />} />
+          <Route path="/feedback" element={<FeedbackPage />} />
         </Routes>
       </div>
     </div>

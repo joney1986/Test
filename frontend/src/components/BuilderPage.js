@@ -11,6 +11,7 @@ function BuilderPage() {
     experience: [{ jobTitle: '', company: '', dates: '', responsibilities: '' }],
     education: [{ degree: '', school: '', dates: '' }],
     skills: '',
+    template: 'classic', // a default template
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -83,8 +84,14 @@ function BuilderPage() {
   return (
     <div className="container">
         <h1>AI Resume Builder</h1>
-        <p>Fill out the form below to generate a downloadable PDF of your resume.</p>
+        <p>Fill out the form below and choose a template to generate your PDF resume.</p>
         <form onSubmit={handleSubmit} className="resume-form">
+          <h2>Template</h2>
+          <select name="template" value={formData.template} onChange={handleChange} className="template-selector">
+            <option value="classic">Classic</option>
+            <option value="modern">Modern</option>
+          </select>
+
           <h2>Personal Information</h2>
           <input type="text" name="name" placeholder="Full Name" onChange={handleChange} required />
           <input type="email" name="email" placeholder="Email" onChange={handleChange} required />

@@ -8,7 +8,6 @@ from fpdf import FPDF
 nlp = spacy.load("en_core_web_sm")
 
 # A predefined list of skills, now structured with importance.
-# In a real-world app, this might be dynamically determined.
 SKILLS_DB = {
     "required": [
         'python', 'javascript', 'sql', 'machine learning', 'project management'
@@ -32,12 +31,11 @@ for skill in all_skills:
 app = Flask(__name__)
 CORS(app)
 
-def create_resume_pdf(data):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
+# --- PDF Template Functions ---
 
-    # Header
+def create_classic_template(pdf, data):
+    """Generates a resume with a classic, centered layout."""
+    pdf.set_font('Helvetica', '', 10)
     name = data.get('name', '')
     if name:
         pdf.set_font('Helvetica', 'B', 20)
@@ -50,17 +48,20 @@ def create_resume_pdf(data):
     if contact_info:
         pdf.set_font('Helvetica', '', 10)
         pdf.cell(0, 10, " | ".join(contact_info), 0, 1, 'C')
-
     pdf.ln(5)
 
-    # Summary
-    summary = data.get('summary', '')
-    if summary:
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 10, 'PROFESSIONAL SUMMARY', 0, 1)
-        pdf.set_font('Helvetica', '', 10)
-        pdf.multi_cell(0, 5, summary)
-        pdf.ln(5)
+    # Sections
+    sections = {
+        'PROFESSIONAL SUMMARY': data.get('summary'),
+        'SKILLS': data.get('skills')
+    }
+    for title, content in sections.items():
+        if content:
+            pdf.set_font('Helvetica', 'B', 12)
+            pdf.cell(0, 10, title, 0, 1)
+            pdf.set_font('Helvetica', '', 10)
+            pdf.multi_cell(0, 5, content)
+            pdf.ln(5)
 
     # Work Experience
     experience = data.get('experience', [])
@@ -90,13 +91,86 @@ def create_resume_pdf(data):
                 pdf.cell(0, 5, f"{edu.get('school', '')} | {edu.get('dates', '')}", 0, 1)
                 pdf.ln(3)
 
-    # Skills
-    skills = data.get('skills', '')
-    if skills:
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 10, 'SKILLS', 0, 1)
-        pdf.set_font('Helvetica', '', 10)
-        pdf.multi_cell(0, 5, skills)
+def create_modern_template(pdf, data):
+    """Generates a resume with a modern, left-aligned layout and different fonts."""
+    pdf.set_text_color(34, 49, 63)
+    pdf.set_font('Times', '', 10)
+
+    # Header
+    name = data.get('name', '')
+    if name:
+        pdf.set_font('Times', 'B', 28)
+        pdf.cell(0, 12, name, 0, 1, 'L')
+
+    contact_info = []
+    if data.get('email'): contact_info.append(data.get('email'))
+    if data.get('phone'): contact_info.append(data.get('phone'))
+    if data.get('linkedin'): contact_info.append(data.get('linkedin'))
+    if contact_info:
+        pdf.set_font('Times', '', 10)
+        pdf.cell(0, 6, " | ".join(contact_info), 0, 1, 'L')
+
+    pdf.ln(8)
+
+    # Sections
+    sections = {
+        'PROFESSIONAL SUMMARY': data.get('summary'),
+        'SKILLS': data.get('skills')
+    }
+    for title, content in sections.items():
+        if content:
+            pdf.set_font('Times', 'B', 14)
+            pdf.cell(0, 8, title, 'B', 1)
+            pdf.ln(4)
+            pdf.set_font('Times', '', 10)
+            pdf.multi_cell(0, 5, content)
+            pdf.ln(5)
+
+    # Work Experience
+    experience = data.get('experience', [])
+    if experience and any(exp.get('jobTitle') for exp in experience):
+        pdf.set_font('Times', 'B', 14)
+        pdf.cell(0, 8, 'WORK EXPERIENCE', 'B', 1)
+        pdf.ln(4)
+        for exp in experience:
+            if exp.get('jobTitle'):
+                pdf.set_font('Times', 'B', 11)
+                pdf.cell(0, 5, f"{exp.get('jobTitle', '').upper()}", 0, 1)
+                pdf.set_font('Times', 'I', 10)
+                pdf.cell(0, 5, f"{exp.get('company', '')} | {exp.get('dates', '')}", 0, 1)
+                pdf.set_font('Times', '', 10)
+                responsibilities = exp.get('responsibilities', '').split('\n')
+                for resp in responsibilities:
+                    if resp:
+                        pdf.multi_cell(0, 5, f'  - {resp.strip()}')
+                pdf.ln(3)
+
+    # Education
+    education = data.get('education', [])
+    if education and any(edu.get('degree') for edu in education):
+        pdf.set_font('Times', 'B', 14)
+        pdf.cell(0, 8, 'EDUCATION', 'B', 1)
+        pdf.ln(4)
+        pdf.set_font('Times', '', 10)
+        for edu in education:
+            if edu.get('degree'):
+                pdf.set_font('Times', 'B', 11)
+                pdf.cell(0, 5, f"{edu.get('degree', '')}", 0, 1)
+                pdf.set_font('Times', 'I', 10)
+                pdf.cell(0, 5, f"{edu.get('school', '')} | {edu.get('dates', '')}", 0, 1)
+                pdf.ln(3)
+
+def create_resume_pdf(data):
+    """Main controller to generate the PDF."""
+    template = data.get('template', 'classic')
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+
+    if template == 'modern':
+        create_modern_template(pdf, data)
+    else:
+        create_classic_template(pdf, data)
 
     return pdf.output(dest='S').encode('latin-1')
 
@@ -112,6 +186,7 @@ def extract_skills(text):
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
+    # ... (analyze function is the same)
     data = request.get_json()
     resume_text = data.get('resume', '')
     jd_text = data.get('job_description', '')
@@ -153,6 +228,7 @@ def analyze():
 
 @app.route('/generate-resume', methods=['POST'])
 def generate_resume():
+    # This endpoint is now updated in the next step
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided."}), 400

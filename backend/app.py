@@ -1,46 +1,63 @@
-from flask import Flask, jsonify, request, send_from_directory
-import os
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+import spacy
 
-# The static folder is now the 'dist' directory of the built React app.
-# The path is relative to the location of this script.
-static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist'))
+# Load the spaCy model
+nlp = spacy.load("en_core_web_sm")
 
-app = Flask(__name__, static_folder=static_dir, static_url_path='')
+# A predefined list of skills. This can be expanded significantly.
+SKILLS_DB = [
+    'python', 'java', 'c++', 'javascript', 'react', 'angular', 'vue',
+    'sql', 'nosql', 'mongodb', 'postgresql', 'docker', 'kubernetes',
+    'aws', 'azure', 'gcp', 'machine learning', 'deep learning', 'nlp',
+    'data analysis', 'project management', 'agile', 'scrum'
+]
+
+app = Flask(__name__)
+CORS(app)
+
+def extract_skills(text):
+    """Extracts skills from a text using spaCy's noun chunks and a predefined skill list."""
+    doc = nlp(text.lower())
+
+    # Using noun chunks to find potential skills
+    noun_chunks = [chunk.text for chunk in doc.noun_chunks]
+
+    # Combining with a search for our predefined skills
+    found_skills = set()
+    for skill in SKILLS_DB:
+        if skill in text.lower():
+            found_skills.add(skill)
+
+    for chunk in noun_chunks:
+        if chunk in SKILLS_DB:
+            found_skills.add(chunk)
+
+    return list(found_skills)
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     data = request.get_json()
-    resume = data.get('resume', '')
-    job_description = data.get('job_description', '')
+    resume_text = data.get('resume', '')
+    jd_text = data.get('job_description', '')
 
-    # Simple keyword extraction and scoring logic
-    jd_keywords = set(job_description.lower().split())
-    resume_keywords = set(resume.lower().split())
+    resume_skills = extract_skills(resume_text)
+    jd_skills = extract_skills(jd_text)
 
-    # Find common keywords
-    common_keywords = jd_keywords.intersection(resume_keywords)
+    # Calculate matched and missing skills
+    matched_skills = list(set(resume_skills) & set(jd_skills))
+    missing_skills = list(set(jd_skills) - set(resume_skills))
 
-    # Ignore common English words (stop words)
-    stop_words = set(['a', 'an', 'the', 'in', 'on', 'of', 'for', 'to', 'and', 'is', 'are', 'with', 'it', 'as', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'but', 'if', 'or', 'so', 'about', 'i', 'me', 'my', 'we', 'our', 'you', 'your'])
-    meaningful_keywords = [word for word in common_keywords if word not in stop_words and len(word) > 2]
-
+    # Calculate score
     score = 0
-    if len(jd_keywords) > 0:
-        # Calculate score based on the number of matching meaningful keywords
-        score = (len(meaningful_keywords) / len(jd_keywords - stop_words)) * 100 if len(jd_keywords - stop_words) > 0 else 0
+    if len(jd_skills) > 0:
+        score = (len(matched_skills) / len(jd_skills)) * 100
 
     return jsonify({
         'score': round(score, 2),
-        'keywords': list(meaningful_keywords)
+        'matched_skills': matched_skills,
+        'missing_skills': missing_skills,
     })
-
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve(path):
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
-    else:
-        return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -28,7 +28,6 @@ function App() {
       setResults(data);
     } catch (error) {
       console.error('There was a problem with the fetch operation:', error);
-      // Optionally, set an error state here to display to the user
     } finally {
       setLoading(false);
     }

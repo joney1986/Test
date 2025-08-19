@@ -2,16 +2,19 @@
 
 This project is the foundational implementation of the "Final Round AI" application, specifically the AI Resume Analyzer feature. It's a full-stack web application with a React frontend and a Flask (Python) backend.
 
+This version uses the `spaCy` Natural Language Processing (NLP) library to perform an intelligent analysis of resumes and job descriptions.
+
 ## Features
 
 -   A web interface to paste a resume and a job description.
--   A backend service that analyzes the two texts and returns a match score based on keyword comparison.
--   A results display showing the score and the list of matching keywords.
+-   An AI-powered backend service that analyzes the two texts and returns a weighted match score.
+-   The analysis identifies a predefined list of skills and categorizes them into "required" and "nice-to-have".
+-   A detailed results display showing the overall score, and lists of matched and missing skills, broken down by importance.
 
 ## Tech Stack
 
 -   **Frontend:** React (created with Create React App)
--   **Backend:** Python (Flask)
+-   **Backend:** Python (Flask) with `spaCy` for NLP.
 
 ## Getting Started
 
@@ -35,7 +38,12 @@ The backend is a Python Flask application located in the `backend` directory.
     ```bash
     pip install -r ../requirements.txt
     ```
-4.  **Run the Flask server:**
+4.  **Download the spaCy Language Model:**
+    The application uses a `spaCy` model for English. You need to download it before running the server.
+    ```bash
+    python -m spacy download en_core_web_sm
+    ```
+5.  **Run the Flask server:**
     ```bash
     python app.py
     ```
@@ -61,4 +69,4 @@ The frontend is a React application located in the `frontend` directory.
 
 ### How It Works
 
-The React frontend will be running on `localhost:3000` and will make API calls to the Flask backend, which is running on `http://127.0.0.1:5000`. The backend is configured with `Flask-CORS` to allow cross-origin requests from the frontend during development.
+The React frontend will be running on `localhost:3000` and will make API calls to the Flask backend, which is running on `http://127.0.0.1:5000`. The backend uses `spaCy` to process the texts, extracts skills using a `Matcher`, and returns a structured JSON object with the analysis to the frontend. The backend is configured with `Flask-CORS` to allow cross-origin requests from the frontend during development.

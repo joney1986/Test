@@ -1,38 +1,44 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import spacy
+from spacy.matcher import Matcher
 
 # Load the spaCy model
 nlp = spacy.load("en_core_web_sm")
 
-# A predefined list of skills. This can be expanded significantly.
-SKILLS_DB = [
-    'python', 'java', 'c++', 'javascript', 'react', 'angular', 'vue',
-    'sql', 'nosql', 'mongodb', 'postgresql', 'docker', 'kubernetes',
-    'aws', 'azure', 'gcp', 'machine learning', 'deep learning', 'nlp',
-    'data analysis', 'project management', 'agile', 'scrum'
-]
+# A predefined list of skills, now structured with importance.
+# In a real-world app, this might be dynamically determined.
+SKILLS_DB = {
+    "required": [
+        'python', 'javascript', 'sql', 'machine learning', 'project management'
+    ],
+    "nice_to_have": [
+        'java', 'c++', 'react', 'angular', 'vue', 'nosql', 'mongodb',
+        'postgresql', 'docker', 'kubernetes', 'aws', 'azure', 'gcp',
+        'deep learning', 'nlp', 'data analysis', 'agile', 'scrum'
+    ]
+}
+
+# Initialize the Matcher with the shared vocabulary
+matcher = Matcher(nlp.vocab)
+
+# Create patterns for all skills
+all_skills = SKILLS_DB['required'] + SKILLS_DB['nice_to_have']
+for skill in all_skills:
+    pattern = [{'LOWER': token} for token in skill.split()]
+    matcher.add(skill, [pattern])
 
 app = Flask(__name__)
 CORS(app)
 
 def extract_skills(text):
-    """Extracts skills from a text using spaCy's noun chunks and a predefined skill list."""
-    doc = nlp(text.lower())
-
-    # Using noun chunks to find potential skills
-    noun_chunks = [chunk.text for chunk in doc.noun_chunks]
-
-    # Combining with a search for our predefined skills
+    """Extracts skills from a text using spaCy's Matcher."""
+    doc = nlp(text)
+    matches = matcher(doc)
     found_skills = set()
-    for skill in SKILLS_DB:
-        if skill in text.lower():
-            found_skills.add(skill)
-
-    for chunk in noun_chunks:
-        if chunk in SKILLS_DB:
-            found_skills.add(chunk)
-
+    for match_id, start, end in matches:
+        skill = nlp.vocab.strings[match_id]
+        found_skills.add(skill)
     return list(found_skills)
 
 @app.route('/analyze', methods=['POST'])
@@ -41,22 +47,44 @@ def analyze():
     resume_text = data.get('resume', '')
     jd_text = data.get('job_description', '')
 
-    resume_skills = extract_skills(resume_text)
-    jd_skills = extract_skills(jd_text)
+    if not resume_text or not jd_text:
+        return jsonify({"error": "Resume or job description is missing."}), 400
 
-    # Calculate matched and missing skills
-    matched_skills = list(set(resume_skills) & set(jd_skills))
-    missing_skills = list(set(jd_skills) - set(resume_skills))
+    resume_skills = set(extract_skills(resume_text))
 
-    # Calculate score
+    # For this version, we assume the job description skills are our predefined lists
+    # A more advanced version would extract these from the jd_text
+    jd_required_skills = set(SKILLS_DB['required'])
+    jd_nice_to_have_skills = set(SKILLS_DB['nice_to_have'])
+
+    # Calculate matched skills
+    matched_required = list(resume_skills & jd_required_skills)
+    matched_nice_to_have = list(resume_skills & jd_nice_to_have_skills)
+
+    # Calculate missing skills
+    missing_required = list(jd_required_skills - resume_skills)
+    missing_nice_to_have = list(jd_nice_to_have_skills - resume_skills)
+
+    # Calculate weighted score
     score = 0
-    if len(jd_skills) > 0:
-        score = (len(matched_skills) / len(jd_skills)) * 100
+    if len(jd_required_skills) > 0:
+        required_score = (len(matched_required) / len(jd_required_skills)) * 70
+        score += required_score
+
+    if len(jd_nice_to_have_skills) > 0:
+        nice_to_have_score = (len(matched_nice_to_have) / len(jd_nice_to_have_skills)) * 30
+        score += nice_to_have_score
 
     return jsonify({
         'score': round(score, 2),
-        'matched_skills': matched_skills,
-        'missing_skills': missing_skills,
+        'matched_skills': {
+            "required": matched_required,
+            "nice_to_have": matched_nice_to_have
+        },
+        'missing_skills': {
+            "required": missing_required,
+            "nice_to_have": missing_nice_to_have
+        }
     })
 
 if __name__ == '__main__':

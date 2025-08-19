@@ -6,10 +6,12 @@ function App() {
   const [jobDescription, setJobDescription] = useState('');
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleAnalyze = async () => {
     setLoading(true);
     setResults(null);
+    setError(null);
     try {
       const response = await fetch('http://127.0.0.1:5000/analyze', {
         method: 'POST',
@@ -21,16 +23,33 @@ function App() {
           job_description: jobDescription,
         }),
       });
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
       const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Network response was not ok');
+      }
       setResults(data);
     } catch (error) {
       console.error('There was a problem with the fetch operation:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const renderSkillsList = (skills, title) => {
+    if (!skills || skills.length === 0) {
+      return <p>None</p>;
+    }
+    return (
+      <div className="skills-category">
+        <h4>{title}</h4>
+        <ul>
+          {skills.map((skill, index) => (
+            <li key={index}>{skill}</li>
+          ))}
+        </ul>
+      </div>
+    );
   };
 
   return (
@@ -60,22 +79,23 @@ function App() {
       <button id="analyze-button" onClick={handleAnalyze} disabled={loading}>
         {loading ? 'Analyzing...' : 'Analyze'}
       </button>
+      {error && <div className="error-message">{error}</div>}
       {results && (
         <div id="results-container" className="results">
           <h2>Analysis Results</h2>
-          <p><strong>Match Score:</strong> {results.score}%</p>
-          {results.keywords && results.keywords.length > 0 ? (
-            <>
-              <h3>Matching Keywords:</h3>
-              <ul>
-                {results.keywords.map((keyword, index) => (
-                  <li key={index}>{keyword}</li>
-                ))}
-              </ul>
-            </>
-          ) : (
-            <p>No matching keywords found.</p>
-          )}
+          <h3>Overall Match Score: {results.score}%</h3>
+          <div className="skills-grid">
+            <div className="skills-column">
+              <h3>Matched Skills</h3>
+              {renderSkillsList(results.matched_skills.required, 'Required')}
+              {renderSkillsList(results.matched_skills.nice_to_have, 'Nice-to-Have')}
+            </div>
+            <div className="skills-column">
+              <h3>Missing Skills</h3>
+              {renderSkillsList(results.missing_skills.required, 'Required')}
+              {renderSkillsList(results.missing_skills.nice_to_have, 'Nice-to-Have')}
+            </div>
+          </div>
         </div>
       )}
     </div>

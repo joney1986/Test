@@ -244,5 +244,44 @@ def generate_resume():
         print(f"Error generating PDF: {e}")
         return jsonify({"error": "An error occurred while generating the PDF."}), 500
 
+@app.route('/get-suggestions', methods=['POST'])
+def get_suggestions():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided."}), 400
+
+    resume_data = data.get('formData', {})
+    job_description = data.get('jobDescription', '')
+
+    if not job_description:
+        return jsonify({'suggestions': []}) # Return empty if no JD
+
+    # --- Suggestions Logic ---
+    suggestions = []
+
+    # 1. Skill comparison suggestion
+    jd_skills = set(extract_skills(job_description))
+    resume_skills_text = resume_data.get('skills', '')
+    resume_skills = set([s.strip().lower() for s in resume_skills_text.split(',')])
+
+    missing_skills = jd_skills - resume_skills
+    if missing_skills:
+        suggestions.append(f"Consider adding these skills from the job description to your resume: {', '.join(missing_skills)}.")
+
+    # 2. Keyword in summary suggestion
+    summary = resume_data.get('summary', '').lower()
+    jd_keywords = [skill for skill in SKILLS_DB['required'] if skill in job_description.lower()]
+    missing_keywords_in_summary = [kw for kw in jd_keywords if kw not in summary]
+
+    if missing_keywords_in_summary:
+        suggestions.append(f"Your summary could be stronger. Try to include keywords like: {', '.join(missing_keywords_in_summary)}.")
+
+    if not suggestions and jd_skills:
+        suggestions.append("Your resume looks like a great match for this job description! No immediate suggestions.")
+
+    return jsonify({
+        'suggestions': suggestions
+    })
+
 if __name__ == '__main__':
     app.run(debug=True)

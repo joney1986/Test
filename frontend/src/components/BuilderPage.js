@@ -11,9 +11,12 @@ function BuilderPage() {
     experience: [{ jobTitle: '', company: '', dates: '', responsibilities: '' }],
     education: [{ degree: '', school: '', dates: '' }],
     skills: '',
-    template: 'classic', // a default template
+    template: 'classic',
   });
+  const [jobDescription, setJobDescription] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const handleChange = (e, section, index) => {
@@ -44,6 +47,30 @@ function BuilderPage() {
     const newSection = [...formData[section]];
     newSection.splice(index, 1);
     setFormData({ ...formData, [section]: newSection });
+  };
+
+  const handleGetSuggestions = async () => {
+    setSuggestions([]);
+    setError(null);
+    setSuggestionsLoading(true);
+    try {
+      const response = await fetch('http://127.0.0.1:5000/get-suggestions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ formData, jobDescription }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to get suggestions');
+      }
+      setSuggestions(data.suggestions);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setSuggestionsLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -83,55 +110,80 @@ function BuilderPage() {
 
   return (
     <div className="container">
-        <h1>AI Resume Builder</h1>
-        <p>Fill out the form below and choose a template to generate your PDF resume.</p>
-        <form onSubmit={handleSubmit} className="resume-form">
-          <h2>Template</h2>
-          <select name="template" value={formData.template} onChange={handleChange} className="template-selector">
-            <option value="classic">Classic</option>
-            <option value="modern">Modern</option>
-          </select>
+      <div className="builder-columns">
+        <div className="form-column">
+          <h1>AI Resume Builder</h1>
+          <p>Fill out the form, paste a job description, and get AI-powered suggestions!</p>
+          <form onSubmit={handleSubmit} className="resume-form">
+            <h2>Template</h2>
+            <select name="template" value={formData.template} onChange={handleChange} className="template-selector">
+              <option value="classic">Classic</option>
+              <option value="modern">Modern</option>
+            </select>
 
-          <h2>Personal Information</h2>
-          <input type="text" name="name" placeholder="Full Name" onChange={handleChange} required />
-          <input type="email" name="email" placeholder="Email" onChange={handleChange} required />
-          <input type="tel" name="phone" placeholder="Phone" onChange={handleChange} />
-          <input type="url" name="linkedin" placeholder="LinkedIn Profile URL" onChange={handleChange} />
+            <h2>Personal Information</h2>
+            <input type="text" name="name" placeholder="Full Name" onChange={handleChange} required />
+            <input type="email" name="email" placeholder="Email" onChange={handleChange} required />
+            <input type="tel" name="phone" placeholder="Phone" onChange={handleChange} />
+            <input type="url" name="linkedin" placeholder="LinkedIn Profile URL" onChange={handleChange} />
 
-          <h2>Professional Summary</h2>
-          <textarea name="summary" placeholder="A brief summary of your career" onChange={handleChange}></textarea>
+            <h2>Professional Summary</h2>
+            <textarea name="summary" placeholder="A brief summary of your career" onChange={handleChange}></textarea>
 
-          <h2>Work Experience</h2>
-          {formData.experience.map((exp, index) => (
-            <div key={index} className="form-section">
-              <input type="text" name="jobTitle" placeholder="Job Title" value={exp.jobTitle} onChange={(e) => handleChange(e, 'experience', index)} />
-              <input type="text" name="company" placeholder="Company" value={exp.company} onChange={(e) => handleChange(e, 'experience', index)} />
-              <input type="text" name="dates" placeholder="Dates (e.g., Jan 2020 - Present)" value={exp.dates} onChange={(e) => handleChange(e, 'experience', index)} />
-              <textarea name="responsibilities" placeholder="Key Responsibilities (one per line)" value={exp.responsibilities} onChange={(e) => handleChange(e, 'experience', index)}></textarea>
-              {formData.experience.length > 1 && <button type="button" className="remove-btn" onClick={() => removeSection('experience', index)}>Remove</button>}
-            </div>
-          ))}
-          <button type="button" className="add-btn" onClick={() => addSection('experience')}>Add Experience</button>
+            <h2>Work Experience</h2>
+            {formData.experience.map((exp, index) => (
+              <div key={index} className="form-section">
+                <input type="text" name="jobTitle" placeholder="Job Title" value={exp.jobTitle} onChange={(e) => handleChange(e, 'experience', index)} />
+                <input type="text" name="company" placeholder="Company" value={exp.company} onChange={(e) => handleChange(e, 'experience', index)} />
+                <input type="text" name="dates" placeholder="Dates (e.g., Jan 2020 - Present)" value={exp.dates} onChange={(e) => handleChange(e, 'experience', index)} />
+                <textarea name="responsibilities" placeholder="Key Responsibilities (one per line)" value={exp.responsibilities} onChange={(e) => handleChange(e, 'experience', index)}></textarea>
+                {formData.experience.length > 1 && <button type="button" className="remove-btn" onClick={() => removeSection('experience', index)}>Remove</button>}
+              </div>
+            ))}
+            <button type="button" className="add-btn" onClick={() => addSection('experience')}>Add Experience</button>
 
-          <h2>Education</h2>
-          {formData.education.map((edu, index) => (
-            <div key={index} className="form-section">
-              <input type="text" name="degree" placeholder="Degree (e.g., B.S. in Computer Science)" value={edu.degree} onChange={(e) => handleChange(e, 'education', index)} />
-              <input type="text" name="school" placeholder="School/University" value={edu.school} onChange={(e) => handleChange(e, 'education', index)} />
-              <input type="text" name="dates" placeholder="Dates (e.g., Aug 2016 - May 2020)" value={edu.dates} onChange={(e) => handleChange(e, 'education', index)} />
-              {formData.education.length > 1 && <button type="button" className="remove-btn" onClick={() => removeSection('education', index)}>Remove</button>}
-            </div>
-          ))}
-          <button type="button" className="add-btn" onClick={() => addSection('education')}>Add Education</button>
+            <h2>Education</h2>
+            {formData.education.map((edu, index) => (
+              <div key={index} className="form-section">
+                <input type="text" name="degree" placeholder="Degree (e.g., B.S. in Computer Science)" value={edu.degree} onChange={(e) => handleChange(e, 'education', index)} />
+                <input type="text" name="school" placeholder="School/University" value={edu.school} onChange={(e) => handleChange(e, 'education', index)} />
+                <input type="text" name="dates" placeholder="Dates (e.g., Aug 2016 - May 2020)" value={edu.dates} onChange={(e) => handleChange(e, 'education', index)} />
+                {formData.education.length > 1 && <button type="button" className="remove-btn" onClick={() => removeSection('education', index)}>Remove</button>}
+              </div>
+            ))}
+            <button type="button" className="add-btn" onClick={() => addSection('education')}>Add Education</button>
 
-          <h2>Skills</h2>
-          <textarea name="skills" placeholder="List your skills, separated by commas" onChange={handleChange}></textarea>
+            <h2>Skills</h2>
+            <textarea name="skills" placeholder="List your skills, separated by commas" onChange={handleChange}></textarea>
 
-          <button type="submit" className="submit-btn" disabled={loading}>
-            {loading ? 'Generating PDF...' : 'Generate and Download PDF'}
+            <button type="submit" className="submit-btn" disabled={loading}>
+              {loading ? 'Generating PDF...' : 'Generate and Download PDF'}
+            </button>
+            {error && <div className="error-message">{error}</div>}
+          </form>
+        </div>
+        <div className="preview-column">
+          <h2>AI Suggestions</h2>
+          <textarea
+            className="jd-textarea"
+            placeholder="Paste the job description here to get suggestions..."
+            value={jobDescription}
+            onChange={(e) => setJobDescription(e.target.value)}
+          />
+          <button type="button" className="get-suggestions-btn" onClick={handleGetSuggestions} disabled={suggestionsLoading}>
+            {suggestionsLoading ? 'Getting Suggestions...' : 'Get AI Suggestions'}
           </button>
-          {error && <div className="error-message">{error}</div>}
-        </form>
+          <div className="suggestions-panel">
+            {suggestions.length > 0 ? (
+              <ul>
+                {suggestions.map((s, i) => <li key={i}>{s}</li>)}
+              </ul>
+            ) : (
+              <p>Your personalized suggestions will appear here.</p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

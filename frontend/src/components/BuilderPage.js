@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Preview from './Preview';
 import TemplateGallery from './TemplateGallery';
+import { useAuth } from '../context/AuthContext';
 import '../App.css';
 import '../styles/templates/Original.css';
 import '../styles/templates/Harvard.css';
@@ -15,6 +16,8 @@ const templates = [
 ];
 
 function BuilderPage() {
+  const { isAuthenticated, token } = useAuth();
+
   const initialData = {
     name: '',
     email: '',
@@ -29,31 +32,70 @@ function BuilderPage() {
   };
 
   const [formData, setFormData] = useState(() => {
-    try {
-      const savedData = localStorage.getItem('resumeData');
-      // Ensure that loaded data has the same structure as initialData
-      if (savedData) {
-        const parsedData = JSON.parse(savedData);
-        // A simple check to see if the loaded data is reasonable
-        if (parsedData.name !== undefined && parsedData.experience !== undefined) {
-          return parsedData;
-        }
-      }
-      return initialData;
-    } catch (error) {
-      console.error("Failed to load data from localStorage", error);
-      return initialData;
-    }
+    const savedData = localStorage.getItem('resumeData');
+    return savedData ? JSON.parse(savedData) : initialData;
   });
 
-  // Save to localStorage on every change to formData
+  const [saveStatus, setSaveStatus] = useState('');
+
+
+  // Effect for loading data from API if user is logged in
   useEffect(() => {
-    try {
-      localStorage.setItem('resumeData', JSON.stringify(formData));
-    } catch (error) {
-      console.error("Failed to save data to localStorage", error);
-    }
+    const loadFromApi = async () => {
+      if (isAuthenticated) {
+        try {
+          const response = await fetch('http://127.0.0.1:5000/api/resume', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data) {
+              setFormData(data);
+            }
+          }
+        } catch (error) {
+          console.error("Failed to load resume from API", error);
+        }
+      }
+    };
+    loadFromApi();
+  }, [isAuthenticated, token]);
+
+
+  // Effect for saving data to localStorage
+  useEffect(() => {
+    localStorage.setItem('resumeData', JSON.stringify(formData));
   }, [formData]);
+
+
+  const handleSaveToCloud = async () => {
+    if (!isAuthenticated) {
+        setSaveStatus("Please log in to save your resume to the cloud.");
+        return;
+    }
+    setSaveStatus("Saving...");
+    try {
+        const response = await fetch('http://127.0.0.1:5000/api/resume', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify(formData),
+        });
+        if (response.ok) {
+            setSaveStatus("Saved successfully!");
+        } else {
+            setSaveStatus("Failed to save.");
+        }
+    } catch (error) {
+        console.error("Failed to save to cloud", error);
+        setSaveStatus("Error saving.");
+    }
+  };
+
 
   const handleChange = (e, section, index) => {
     if (section) {
@@ -205,9 +247,16 @@ function BuilderPage() {
               </div>
             )}
           </div>
-          <button type="button" className="submit-btn" onClick={handlePrint}>
-            Download as PDF
-          </button>
+          </div>
+          <div className="action-buttons">
+            <button type="button" className="submit-btn" onClick={handleSaveToCloud}>
+              Save to Cloud
+            </button>
+            <button type="button" className="submit-btn" onClick={handlePrint}>
+              Download as PDF
+            </button>
+          </div>
+          {saveStatus && <p className="message">{saveStatus}</p>}
         </div>
         <div className="preview-column">
           <Preview data={formData} templateName={formData.template} />

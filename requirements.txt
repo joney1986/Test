@@ -3,3 +3,7 @@ Werkzeug<3.0.0
 Flask-Cors==3.0.10
 spacy==3.7.2
 fpdf2==2.7.4
+Flask-SQLAlchemy==2.5.1
+Flask-Bcrypt==1.0.1
+Flask-JWT-Extended==4.4.4
+Flask-Migrate==3.1.0

@@ -318,3 +318,42 @@ button:hover {
     width: auto;
     padding: 8px 12px;
 }
+
+/* Auth Page Styles */
+.auth-container {
+  max-width: 500px;
+  margin-top: 40px;
+}
+
+.message {
+  text-align: center;
+  margin-top: 15px;
+  padding: 10px;
+  border-radius: 5px;
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.nav-link-button {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 5px;
+  font-family: inherit;
+}
+.nav-link-button:hover {
+  color: #ccc;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.action-buttons .submit-btn {
+  margin-top: 0;
+}

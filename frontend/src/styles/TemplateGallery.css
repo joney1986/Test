@@ -1,0 +1,47 @@
+/* frontend/src/styles/TemplateGallery.css */
+
+.template-gallery {
+  margin-bottom: 20px;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 15px;
+}
+
+.gallery-item {
+  border: 3px solid #eee;
+  border-radius: 5px;
+  padding: 5px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  text-align: center;
+  background-color: #fff;
+}
+
+.gallery-item:hover {
+  border-color: #337ab7;
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.gallery-item.selected {
+  border-color: #5cb85c; /* A nice green to indicate selection */
+  box-shadow: 0 0 10px #5cb85c;
+}
+
+.gallery-item img {
+  width: 100%;
+  height: auto;
+  border-radius: 3px;
+  display: block;
+}
+
+.template-name {
+  margin-top: 8px;
+  margin-bottom: 3px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: #333;
+}

@@ -1,0 +1,45 @@
+@media print {
+  /* Hide everything except the resume preview and its children */
+  body * {
+    visibility: hidden;
+  }
+
+  .resume-preview, .resume-preview * {
+    visibility: visible;
+  }
+
+  /* Make the preview take up the whole page */
+  .resume-preview {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    font-size: 10pt; /* Adjust font size for print */
+  }
+
+  /* Ensure section headers are not broken across pages */
+  h2 {
+    page-break-after: avoid;
+  }
+
+  /* Ensure job/education entries are not broken across pages */
+  .job, .education-entry {
+    page-break-inside: avoid;
+  }
+
+  /* General print-friendly text color */
+  h1, h2, h3, p, li {
+    color: #000 !important;
+  }
+
+  /* Define page layout */
+  @page {
+    size: A4;
+    margin: 1.5cm;
+  }
+}

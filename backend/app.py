@@ -1,287 +1,121 @@
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_bcrypt import Bcrypt
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_cors import CORS
-import spacy
-from spacy.matcher import Matcher
-from fpdf import FPDF
+from flask_migrate import Migrate
 
-# Load the spaCy model
-nlp = spacy.load("en_core_web_sm")
+# Initialize extensions
+db = SQLAlchemy()
+bcrypt = Bcrypt()
+jwt = JWTManager()
+migrate = Migrate()
 
-# A predefined list of skills, now structured with importance.
-SKILLS_DB = {
-    "required": [
-        'python', 'javascript', 'sql', 'machine learning', 'project management'
-    ],
-    "nice_to_have": [
-        'java', 'c++', 'react', 'angular', 'vue', 'nosql', 'mongodb',
-        'postgresql', 'docker', 'kubernetes', 'aws', 'azure', 'gcp',
-        'deep learning', 'nlp', 'data analysis', 'agile', 'scrum'
-    ]
-}
+def create_app():
+    """Create and configure an instance of the Flask application."""
+    app = Flask(__name__)
+    CORS(app) # Enable CORS for all routes, can be configured more securely
 
-# Initialize the Matcher with the shared vocabulary
-matcher = Matcher(nlp.vocab)
+    # Configuration
+    # In a real app, these should be loaded from environment variables
+    app.config['SECRET_KEY'] = 'a-very-secret-key-that-should-be-changed'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///../database.sqlite' # Store db in root
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['JWT_SECRET_KEY'] = 'another-super-secret-key-for-jwt'
 
-# Create patterns for all skills
-all_skills = SKILLS_DB['required'] + SKILLS_DB['nice_to_have']
-for skill in all_skills:
-    pattern = [{'LOWER': token} for token in skill.split()]
-    matcher.add(skill, [pattern])
+    # Initialize extensions with the app
+    db.init_app(app)
+    bcrypt.init_app(app)
+    jwt.init_app(app)
+    migrate.init_app(app, db)
 
-app = Flask(__name__)
-CORS(app)
+    with app.app_context():
+        from . import models # Import models to register them with SQLAlchemy
 
-# --- PDF Template Functions ---
+    # Import and register blueprints for routes will go here in the next step
+    # from .routes.auth import auth_bp
+    # from .routes.resume import resume_bp
+    # app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    # app.register_blueprint(resume_bp, url_prefix='/api')
 
-def create_classic_template(pdf, data):
-    """Generates a resume with a classic, centered layout."""
-    pdf.set_font('Helvetica', '', 10)
-    name = data.get('name', '')
-    if name:
-        pdf.set_font('Helvetica', 'B', 20)
-        pdf.cell(0, 10, name.upper(), 0, 1, 'C')
+    @app.before_first_request
+    def create_tables():
+        db.create_all()
 
-    contact_info = []
-    if data.get('email'): contact_info.append(data.get('email'))
-    if data.get('phone'): contact_info.append(data.get('phone'))
-    if data.get('linkedin'): contact_info.append(data.get('linkedin'))
-    if contact_info:
-        pdf.set_font('Helvetica', '', 10)
-        pdf.cell(0, 10, " | ".join(contact_info), 0, 1, 'C')
-    pdf.ln(5)
+    @app.route('/api/auth/register', methods=['POST'])
+    def register_user():
+        from .models import User
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
 
-    # Sections
-    sections = {
-        'PROFESSIONAL SUMMARY': data.get('summary'),
-        'SKILLS': data.get('skills')
-    }
-    for title, content in sections.items():
-        if content:
-            pdf.set_font('Helvetica', 'B', 12)
-            pdf.cell(0, 10, title, 0, 1)
-            pdf.set_font('Helvetica', '', 10)
-            pdf.multi_cell(0, 5, content)
-            pdf.ln(5)
+        if not email or not password:
+            return jsonify({"msg": "Email and password are required"}), 400
+        if User.query.filter_by(email=email).first():
+            return jsonify({"msg": "Email already exists"}), 400
 
-    # Work Experience
-    experience = data.get('experience', [])
-    if experience and any(exp.get('jobTitle') for exp in experience):
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 10, 'WORK EXPERIENCE', 0, 1)
-        for exp in experience:
-            if exp.get('jobTitle'):
-                pdf.set_font('Helvetica', 'B', 10)
-                pdf.cell(0, 5, f"{exp.get('jobTitle', '').upper()} | {exp.get('company', '')} | {exp.get('dates', '')}", 0, 1)
-                pdf.set_font('Helvetica', '', 10)
-                responsibilities = exp.get('responsibilities', '').split('\n')
-                for resp in responsibilities:
-                    if resp:
-                        pdf.multi_cell(0, 5, f'  - {resp.strip()}')
-                pdf.ln(3)
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        new_user = User(email=email, password_hash=hashed_password)
+        db.session.add(new_user)
+        db.session.commit()
+        return jsonify({"msg": "User created successfully"}), 201
 
-    # Education
-    education = data.get('education', [])
-    if education and any(edu.get('degree') for edu in education):
-        pdf.set_font('Helvetica', 'B', 12)
-        pdf.cell(0, 10, 'EDUCATION', 0, 1)
-        pdf.set_font('Helvetica', '', 10)
-        for edu in education:
-            if edu.get('degree'):
-                pdf.cell(0, 5, f"{edu.get('degree', '')}", 0, 1)
-                pdf.cell(0, 5, f"{edu.get('school', '')} | {edu.get('dates', '')}", 0, 1)
-                pdf.ln(3)
+    @app.route('/api/auth/login', methods=['POST'])
+    def login_user():
+        from .models import User
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
 
-def create_modern_template(pdf, data):
-    """Generates a resume with a modern, left-aligned layout and different fonts."""
-    pdf.set_text_color(34, 49, 63)
-    pdf.set_font('Times', '', 10)
+        if not email or not password:
+            return jsonify({"msg": "Email and password are required"}), 400
 
-    # Header
-    name = data.get('name', '')
-    if name:
-        pdf.set_font('Times', 'B', 28)
-        pdf.cell(0, 12, name, 0, 1, 'L')
+        user = User.query.filter_by(email=email).first()
 
-    contact_info = []
-    if data.get('email'): contact_info.append(data.get('email'))
-    if data.get('phone'): contact_info.append(data.get('phone'))
-    if data.get('linkedin'): contact_info.append(data.get('linkedin'))
-    if contact_info:
-        pdf.set_font('Times', '', 10)
-        pdf.cell(0, 6, " | ".join(contact_info), 0, 1, 'L')
+        if user and bcrypt.check_password_hash(user.password_hash, password):
+            access_token = create_access_token(identity=user.id)
+            return jsonify(access_token=access_token)
 
-    pdf.ln(8)
+        return jsonify({"msg": "Bad email or password"}), 401
 
-    # Sections
-    sections = {
-        'PROFESSIONAL SUMMARY': data.get('summary'),
-        'SKILLS': data.get('skills')
-    }
-    for title, content in sections.items():
-        if content:
-            pdf.set_font('Times', 'B', 14)
-            pdf.cell(0, 8, title, 'B', 1)
-            pdf.ln(4)
-            pdf.set_font('Times', '', 10)
-            pdf.multi_cell(0, 5, content)
-            pdf.ln(5)
+    @app.route('/api/resume', methods=['GET'])
+    @jwt_required()
+    def get_resume():
+        from .models import Resume
+        import json
+        current_user_id = get_jwt_identity()
+        resume = Resume.query.filter_by(user_id=current_user_id).first()
+        if resume:
+            # The data is stored as a JSON string, so we parse it back to an object
+            return jsonify(json.loads(resume.data))
+        return jsonify(None)
 
-    # Work Experience
-    experience = data.get('experience', [])
-    if experience and any(exp.get('jobTitle') for exp in experience):
-        pdf.set_font('Times', 'B', 14)
-        pdf.cell(0, 8, 'WORK EXPERIENCE', 'B', 1)
-        pdf.ln(4)
-        for exp in experience:
-            if exp.get('jobTitle'):
-                pdf.set_font('Times', 'B', 11)
-                pdf.cell(0, 5, f"{exp.get('jobTitle', '').upper()}", 0, 1)
-                pdf.set_font('Times', 'I', 10)
-                pdf.cell(0, 5, f"{exp.get('company', '')} | {exp.get('dates', '')}", 0, 1)
-                pdf.set_font('Times', '', 10)
-                responsibilities = exp.get('responsibilities', '').split('\n')
-                for resp in responsibilities:
-                    if resp:
-                        pdf.multi_cell(0, 5, f'  - {resp.strip()}')
-                pdf.ln(3)
+    @app.route('/api/resume', methods=['POST'])
+    @jwt_required()
+    def save_resume():
+        from .models import Resume
+        import json
+        current_user_id = get_jwt_identity()
+        data = request.get_json()
 
-    # Education
-    education = data.get('education', [])
-    if education and any(edu.get('degree') for edu in education):
-        pdf.set_font('Times', 'B', 14)
-        pdf.cell(0, 8, 'EDUCATION', 'B', 1)
-        pdf.ln(4)
-        pdf.set_font('Times', '', 10)
-        for edu in education:
-            if edu.get('degree'):
-                pdf.set_font('Times', 'B', 11)
-                pdf.cell(0, 5, f"{edu.get('degree', '')}", 0, 1)
-                pdf.set_font('Times', 'I', 10)
-                pdf.cell(0, 5, f"{edu.get('school', '')} | {edu.get('dates', '')}", 0, 1)
-                pdf.ln(3)
+        if data is None:
+            return jsonify({"msg": "No data provided"}), 400
 
-def create_resume_pdf(data):
-    """Main controller to generate the PDF."""
-    template = data.get('template', 'classic')
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
+        resume = Resume.query.filter_by(user_id=current_user_id).first()
 
-    if template == 'modern':
-        create_modern_template(pdf, data)
-    else:
-        create_classic_template(pdf, data)
+        resume_data_str = json.dumps(data)
 
-    return pdf.output(dest='S').encode('latin-1')
+        if resume:
+            resume.data = resume_data_str
+        else:
+            resume = Resume(data=resume_data_str, user_id=current_user_id)
+            db.session.add(resume)
 
-def extract_skills(text):
-    """Extracts skills from a text using spaCy's Matcher."""
-    doc = nlp(text)
-    matches = matcher(doc)
-    found_skills = set()
-    for match_id, start, end in matches:
-        skill = nlp.vocab.strings[match_id]
-        found_skills.add(skill)
-    return list(found_skills)
+        db.session.commit()
+        return jsonify({"msg": "Resume saved successfully"})
 
-@app.route('/analyze', methods=['POST'])
-def analyze():
-    # ... (analyze function is the same)
-    data = request.get_json()
-    resume_text = data.get('resume', '')
-    jd_text = data.get('job_description', '')
+    @app.route('/')
+    def index():
+        return "Backend server is running."
 
-    if not resume_text or not jd_text:
-        return jsonify({"error": "Resume or job description is missing."}), 400
-
-    resume_skills = set(extract_skills(resume_text))
-
-    jd_required_skills = set(SKILLS_DB['required'])
-    jd_nice_to_have_skills = set(SKILLS_DB['nice_to_have'])
-
-    matched_required = list(resume_skills & jd_required_skills)
-    matched_nice_to_have = list(resume_skills & jd_nice_to_have_skills)
-
-    missing_required = list(jd_required_skills - resume_skills)
-    missing_nice_to_have = list(jd_nice_to_have_skills - resume_skills)
-
-    score = 0
-    if len(jd_required_skills) > 0:
-        required_score = (len(matched_required) / len(jd_required_skills)) * 70
-        score += required_score
-
-    if len(jd_nice_to_have_skills) > 0:
-        nice_to_have_score = (len(matched_nice_to_have) / len(jd_nice_to_have_skills)) * 30
-        score += nice_to_have_score
-
-    return jsonify({
-        'score': round(score, 2),
-        'matched_skills': {
-            "required": matched_required,
-            "nice_to_have": matched_nice_to_have
-        },
-        'missing_skills': {
-            "required": missing_required,
-            "nice_to_have": missing_nice_to_have
-        }
-    })
-
-@app.route('/generate-resume', methods=['POST'])
-def generate_resume():
-    # This endpoint is now updated in the next step
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "No data provided."}), 400
-
-    try:
-        pdf_bytes = create_resume_pdf(data)
-
-        response = make_response(pdf_bytes)
-        response.headers.set('Content-Type', 'application/pdf')
-        response.headers.set('Content-Disposition', 'attachment', filename='resume.pdf')
-        return response
-    except Exception as e:
-        print(f"Error generating PDF: {e}")
-        return jsonify({"error": "An error occurred while generating the PDF."}), 500
-
-@app.route('/get-suggestions', methods=['POST'])
-def get_suggestions():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "No data provided."}), 400
-
-    resume_data = data.get('formData', {})
-    job_description = data.get('jobDescription', '')
-
-    if not job_description:
-        return jsonify({'suggestions': []}) # Return empty if no JD
-
-    # --- Suggestions Logic ---
-    suggestions = []
-
-    # 1. Skill comparison suggestion
-    jd_skills = set(extract_skills(job_description))
-    resume_skills_text = resume_data.get('skills', '')
-    resume_skills = set([s.strip().lower() for s in resume_skills_text.split(',')])
-
-    missing_skills = jd_skills - resume_skills
-    if missing_skills:
-        suggestions.append(f"Consider adding these skills from the job description to your resume: {', '.join(missing_skills)}.")
-
-    # 2. Keyword in summary suggestion
-    summary = resume_data.get('summary', '').lower()
-    jd_keywords = [skill for skill in SKILLS_DB['required'] if skill in job_description.lower()]
-    missing_keywords_in_summary = [kw for kw in jd_keywords if kw not in summary]
-
-    if missing_keywords_in_summary:
-        suggestions.append(f"Your summary could be stronger. Try to include keywords like: {', '.join(missing_keywords_in_summary)}.")
-
-    if not suggestions and jd_skills:
-        suggestions.append("Your resume looks like a great match for this job description! No immediate suggestions.")
-
-    return jsonify({
-        'suggestions': suggestions
-    })
-
-if __name__ == '__main__':
-    app.run(debug=True)
+    return app

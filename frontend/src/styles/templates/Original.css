@@ -1,0 +1,68 @@
+/* frontend/src/styles/templates/Original.css */
+
+.Original.resume-preview {
+  background: white;
+  padding: 2rem;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  color: #333;
+  line-height: 1.5;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+.Original .resume-header h1 {
+  margin: 0;
+  font-size: 2.5rem;
+  color: #2c3e50;
+  border-bottom: 2px solid #2c3e50;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  text-align: left;
+}
+
+.Original .resume-header p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #555;
+  text-align: left;
+}
+
+.Original.resume-preview section {
+  margin-top: 1.5rem;
+}
+
+.Original.resume-preview h2 {
+  font-size: 1.2rem;
+  color: #34495e;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 0.3rem;
+  margin-bottom: 1rem;
+  text-align: left; /* Override global center align */
+}
+
+.Original .job, .Original .education-entry {
+  margin-bottom: 1rem;
+}
+
+.Original .job h3, .Original .education-entry h3 {
+  margin: 0 0 0.2rem 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.Original .job .dates, .Original .education-entry p {
+  margin: 0;
+  font-size: 0.9rem;
+  font-style: italic;
+  color: #777;
+}
+
+.Original .job p {
+  margin: 0.5rem 0 0 0;
+}
+
+/* Override for two-column structure to keep it single-column */
+.Original .main-content, .Original .sidebar {
+  grid-column: span 2;
+}
